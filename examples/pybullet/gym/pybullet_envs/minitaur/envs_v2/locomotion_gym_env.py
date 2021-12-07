@@ -8,6 +8,7 @@ from typing import Any, Callable, Sequence, Text, Union
 import gin
 import gym
 import numpy as np
+import random
 
 from pybullet_envs.minitaur.envs_v2 import base_client
 from pybullet_utils import bullet_client
@@ -40,6 +41,10 @@ gin.constant('locomotion_gym_env.SIM_CLOCK', SIM_CLOCK)
 
 # This allows us to bind @time.time in the gin configuration.
 gin.external_configurable(time.time, module='time')
+
+def update_desired_velocity(vel):
+  vel += abs(random.random() * 0.001)
+  return vel
 
 
 # TODO(b/122048194): Enable position/torque/hybrid control mode.
@@ -84,6 +89,9 @@ class LocomotionGymEnv(gym.Env):
       ValueError: If the num_action_repeat is less than 1.
 
     """
+    #initial desired v
+    self.desired_velocity = 0
+
     self._pybullet_client = None
     self._metric_logger = metric_logger.MetricLogger()
     # TODO(sehoonha) split observation and full-state sensors (b/129858214)
@@ -152,6 +160,7 @@ class LocomotionGymEnv(gym.Env):
         pybullet.COV_ENABLE_GUI,
         gym_config.simulation_parameters.enable_rendering_gui)
     else:
+      # hanging here for some reason !!!!!
       self._pybullet_client = bullet_client.BulletClient()
     if gym_config.simulation_parameters.egl_rendering:
       self._pybullet_client.loadPlugin('eglRendererPlugin')
@@ -185,24 +194,50 @@ class LocomotionGymEnv(gym.Env):
     self._hard_reset = gym_config.simulation_parameters.enable_hard_reset
 
     # Construct the observation space from the list of sensors.
-    self.observation_space = (
-        space_utils.convert_sensors_to_gym_space_dictionary([
-            sensor for sensor in self.all_sensors()
+    # self.observation_space = (
+    #     space_utils.convert_sensors_to_gym_space_dictionary([
+    #         sensor for sensor in self.all_sensors()
+    #         if sensor.get_name() not in self._gym_config.ignored_sensor_list
+    #     ]))
+    sensors = [sensor for sensor in self.all_sensors()
             if sensor.get_name() not in self._gym_config.ignored_sensor_list
-        ]))
-    print("obs space",self.observation_space)
+        ]
+    gym_space_dict = {}
+    for s in sensors:
+      if isinstance(s, sensor.BoxSpaceSensor):
+        gym_space_dict[s.get_name()] = spaces.Box(
+            np.array(s.get_lower_bound()),
+            np.array(s.get_upper_bound()),
+            dtype=np.float32)
+      elif isinstance(s, sensor.Sensor):
+        if isinstance(s.observation_space, spaces.Box):
+          gym_space_dict[s.get_name()] = s.observation_space
+        elif isinstance(s.observation_space, spaces.Dict):
+          gym_space_dict.update(s.observation_space.spaces)
+        else:
+          raise UnsupportedConversionError(
+              f'Unsupported space type {type(s.observation_space)}, '
+              f'must be Box or Dict. sensor = {s}')
+      else:
+        raise UnsupportedConversionError('sensors = ' + str(sensors))
+    gym_space_dict["desired_velocity"] = spaces.Box(
+            np.array(-5.0),
+            np.array(5.0),
+            dtype=np.float32)
+    self.observation_space = spaces.Dict(gym_space_dict)
+    # print("obs space",self.observation_space)
     # we are not using sensors, instead use manually definied velocities
     # self.observation_space.remove("MotorAngle")
     # self.observation_space[v]=
 
-    obs={}
-    obs["v"] = spaces.Box(
-          np.array([float(-20)]), np.array([float(20)]), dtype=np.float32)
-    obs["v_d"] = spaces.Box(
-          np.array([float(-20)]), np.array([float(20)]), dtype=np.float32)
+    # obs={}
+    # obs["v"] = spaces.Box(
+    #       np.array([float(-20)]), np.array([float(20)]), dtype=np.float32)
+    # obs["v_d"] = spaces.Box(
+    #       np.array([float(-20)]), np.array([float(20)]), dtype=np.float32)
 
-    self.observation_space = spaces.Dict(obs)
-    print("obs space",self.observation_space)
+    # self.observation_space = spaces.Dict(obs)
+    # print("obs space",self.observation_space)
     
 
 
@@ -228,6 +263,7 @@ class LocomotionGymEnv(gym.Env):
     self._robot = self._robot_class(
         pybullet_client=self._pybullet_client, clock=self._clock)
     self.action_space = self._robot.action_space
+    #print("action space:", self.action_space)
 
   def _load(self):
     self._pybullet_client.resetSimulation()
@@ -396,6 +432,9 @@ class LocomotionGymEnv(gym.Env):
     # Loop over all env randomizers.
     for env_randomizer in self._env_randomizers:
       env_randomizer.randomize_env(self)
+
+    # new desired velocity every rollout
+    self.desired_velocity = random.random()
 
     for obj in self._dynamic_objects():
       obj.reset()
@@ -615,6 +654,7 @@ class LocomotionGymEnv(gym.Env):
       return self._task.reward(self)  # TODO(b/154635313): resolve API mismatch
     return 0
 
+
   def _get_observation(self):
     """Get observation of this environment from a list of sensors.
 
@@ -633,6 +673,9 @@ class LocomotionGymEnv(gym.Env):
       else:
         sensors_dict[s.get_name()] = obs
 
+    # add in desired velocity
+    sensors_dict["desired_velocity"] = self.desired_velocity
+
     self._observation_dict = collections.OrderedDict(
         sorted(sensors_dict.items()))
 
@@ -640,26 +683,25 @@ class LocomotionGymEnv(gym.Env):
 
     # could also use only y pos
 
-    cur_velocity = tuple(map(lambda i, j: (i - j)/self._sim_time_step, self._last_base_position, self._robot.base_position))[1]
+    # cur_velocity = tuple(map(lambda i, j: (j - i)/self._sim_time_step, self._last_base_position, self._robot.base_position))[1]
 
-    DESIRED_VELOCITY = update_desired_velocity(DESIRED_VELOCITY)
 
-    new_obs = {}
-    new_obs["v"] = cur_velocity
-    new_obs["v_d"] = desired_velocity
+    # self.desired_velocity = update_desired_velocity(self.desired_velocity)
 
-    self._observation_dict = collections.OrderedDict(
-        sorted(new_obs.items()))
+    # new_obs = {}
+    # new_obs["v"] = cur_velocity
+    # new_obs["v_d"] = self.desired_velocity
 
-    print("obs during training ", self.observation_space)
+    # self._observation_dict = collections.OrderedDict(
+    #     sorted(new_obs.items()))
+
+    # print("obs during training ", self._observation_dict)
     # print("cur velocity: ", tuple(map(lambda i, j: (i - j)/self._sim_time_step, self._last_base_position, self._robot.base_position)))
     # print("cur pos: ", self._robot.base_position)
     # print("last pos: ", self._last_base_position)
 
     return self._observation_dict
 
-  def update_desired_velocity(vel):
-    vel += random.random() * 0.1 #TUNE THIS
 
   def set_time_step(self, num_action_repeat, sim_step=0.001):
     """Sets the time step of the environment.
