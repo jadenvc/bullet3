@@ -31,6 +31,9 @@ _ACTION_EPS = 0.01
 _NUM_SIMULATION_ITERATION_STEPS = 300
 _LOG_BUFFER_LENGTH = 5000
 
+# Set initial desired velocity
+DESIRED_VELOCITY = 10
+
 SIM_CLOCK = 'SIM_CLOCK'
 
 # Exports this symbol so we can use it in the config file.
@@ -681,6 +684,7 @@ class LocomotionGymEnv(gym.Env):
     # could also use only y pos
 
     # cur_velocity = tuple(map(lambda i, j: (j - i)/self._sim_time_step, self._last_base_position, self._robot.base_position))[1]
+
 
     # self.desired_velocity = update_desired_velocity(self.desired_velocity)
 
