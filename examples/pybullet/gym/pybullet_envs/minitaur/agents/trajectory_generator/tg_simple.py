@@ -206,10 +206,10 @@ class TgSimple(object):
 
     # Progress all the phase generators based on delta time.
     for idx, integrator_unit in enumerate(self._integrator_units):
-      # integrator_unit.progress_phase(speeds[idx] * delta_real_time,
-      #                                self._swing_stance_ratio)
-      integrator_unit.progress_phase(delta_real_time,
+      integrator_unit.progress_phase(speeds[idx] * delta_real_time,
                                      self._swing_stance_ratio)
+      # integrator_unit.progress_phase(delta_real_time,
+      #                                self._swing_stance_ratio)
 
     # Set the phases for the legs based on their offsets with phase generators.
     for phase_id, leg_list in enumerate(self._legs_per_integrator_id):

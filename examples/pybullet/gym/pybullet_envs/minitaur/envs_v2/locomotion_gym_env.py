@@ -194,37 +194,37 @@ class LocomotionGymEnv(gym.Env):
     self._hard_reset = gym_config.simulation_parameters.enable_hard_reset
 
     # Construct the observation space from the list of sensors.
-    # self.observation_space = (
-    #     space_utils.convert_sensors_to_gym_space_dictionary([
-    #         sensor for sensor in self.all_sensors()
-    #         if sensor.get_name() not in self._gym_config.ignored_sensor_list
-    #     ]))
-    sensors = [sensor for sensor in self.all_sensors()
+    self.observation_space = (
+        space_utils.convert_sensors_to_gym_space_dictionary([
+            sensor for sensor in self.all_sensors()
             if sensor.get_name() not in self._gym_config.ignored_sensor_list
-        ]
-    gym_space_dict = {}
-    for s in sensors:
-      if isinstance(s, sensor.BoxSpaceSensor):
-        gym_space_dict[s.get_name()] = spaces.Box(
-            np.array(s.get_lower_bound()),
-            np.array(s.get_upper_bound()),
-            dtype=np.float32)
-      elif isinstance(s, sensor.Sensor):
-        if isinstance(s.observation_space, spaces.Box):
-          gym_space_dict[s.get_name()] = s.observation_space
-        elif isinstance(s.observation_space, spaces.Dict):
-          gym_space_dict.update(s.observation_space.spaces)
-        else:
-          raise UnsupportedConversionError(
-              f'Unsupported space type {type(s.observation_space)}, '
-              f'must be Box or Dict. sensor = {s}')
-      else:
-        raise UnsupportedConversionError('sensors = ' + str(sensors))
-    gym_space_dict["desired_velocity"] = spaces.Box(
-            np.array(-5.0),
-            np.array(5.0),
-            dtype=np.float32)
-    self.observation_space = spaces.Dict(gym_space_dict)
+        ]))
+    # sensors = [sensor for sensor in self.all_sensors()
+    #         if sensor.get_name() not in self._gym_config.ignored_sensor_list
+    #     ]
+    # gym_space_dict = {}
+    # for s in sensors:
+    #   if isinstance(s, sensor.BoxSpaceSensor):
+    #     gym_space_dict[s.get_name()] = spaces.Box(
+    #         np.array(s.get_lower_bound()),
+    #         np.array(s.get_upper_bound()),
+    #         dtype=np.float32)
+    #   elif isinstance(s, sensor.Sensor):
+    #     if isinstance(s.observation_space, spaces.Box):
+    #       gym_space_dict[s.get_name()] = s.observation_space
+    #     elif isinstance(s.observation_space, spaces.Dict):
+    #       gym_space_dict.update(s.observation_space.spaces)
+    #     else:
+    #       raise UnsupportedConversionError(
+    #           f'Unsupported space type {type(s.observation_space)}, '
+    #           f'must be Box or Dict. sensor = {s}')
+    #   else:
+    #     raise UnsupportedConversionError('sensors = ' + str(sensors))
+    # gym_space_dict["desired_velocity"] = spaces.Box(
+    #         np.array(-5.0),
+    #         np.array(5.0),
+    #         dtype=np.float32)
+    # self.observation_space = spaces.Dict(gym_space_dict)
     # print("obs space",self.observation_space)
     # we are not using sensors, instead use manually definied velocities
     # self.observation_space.remove("MotorAngle")
